@@ -159,5 +159,47 @@ def compare_districts():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/last_three_days", methods=["POST"])
+def last_three_days():
+    try:
+        # Parse JSON request
+        data = request.get_json()
+        input_day = int(data.get('day'))
+        input_month = data.get('month')
+        input_district = data.get('district')
+
+        if not all([input_day, input_month, input_district]):
+            return jsonify({"error": "Missing data. Ensure 'day', 'month', and 'district' are provided."}), 400
+
+        # Define the list of districts
+        districts = ["Chanakyapuri", "Civil Lines", "Connaught Place", "Daryaganj", "Defence Colony",
+                     "Delhi Cantonment", "Gandhi Nagar", "Hauz Khas", "Kalkaji", "Karol Bagh", "Kotwali",
+                     "Model Town", "Najafgarh", "Narela", "Paharganj", "Parliament Street", "Patel Nagar",
+                     "Preet Vihar", "Punjabi Bagh", "Rajouri Garden", "Sadar Bazaar", "Saraswati Vihar",
+                     "Seelampur", "Seemapuri", "Shahdara", "Vasant Vihar", "Vivek Vihar"]
+
+        if input_district not in districts:
+            return jsonify({"error": "District not found in the list."}), 400
+
+        # Calculate the date range
+        start_date = datetime(year=2024, month=int(input_month.split('_')[1]), day=input_day)
+        predictions = []
+
+        for i in range(3):
+            current_date = start_date - timedelta(days=2-i)
+            formatted_date = current_date.strftime("%d %B")
+            formatted_month = f"Month_{current_date.month}"
+            day_str = f"Day_{current_date.day}"
+
+            # Get prediction for the district
+            ml_input = model_input(day_str, input_district, formatted_month)
+            prediction = model.predict([ml_input])[0]
+
+            predictions.append({"date": formatted_date, "prediction": prediction})
+
+        return jsonify({"district": input_district, "predictions": predictions})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True)
