@@ -1,0 +1,17 @@
+{
+  "district": "Connaught Place",
+  "predictions": [
+    {
+      "date": "10 September",
+      "prediction": 1.0679693189981734
+    },
+    {
+      "date": "11 September",
+      "prediction": 1.0641136204636177
+    },
+    {
+      "date": "12 September",
+      "prediction": 1.1802510126099186
+    }
+  ]
+}

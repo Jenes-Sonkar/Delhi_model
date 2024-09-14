@@ -1,8 +1,12 @@
 from flask import Flask, jsonify, request
 from joblib import load
 from datetime import datetime, timedelta
+from flask_cors import CORS
+import json
+import os
 
 app = Flask(__name__)
+CORS(app)
 
 # Load the pre-trained model
 model = load('MLmodel.joblib')
@@ -168,6 +172,15 @@ def last_three_days():
         input_month = data.get('month')
         input_district = data.get('district')
 
+        # Path to save bardata2.json file (ensure the directory exists)
+        json_dir = os.path.join(os.getcwd(), 'DELHI-ELECTRICITY', 'src', 'components')
+        json_file_path = os.path.join(json_dir, 'bardata2.json')
+
+        # Create the directory if it doesn't exist
+        if not os.path.exists(json_dir):
+            os.makedirs(json_dir)
+
+        # Check if required data is provided
         if not all([input_day, input_month, input_district]):
             return jsonify({"error": "Missing data. Ensure 'day', 'month', and 'district' are provided."}), 400
 
@@ -178,26 +191,41 @@ def last_three_days():
                      "Preet Vihar", "Punjabi Bagh", "Rajouri Garden", "Sadar Bazaar", "Saraswati Vihar",
                      "Seelampur", "Seemapuri", "Shahdara", "Vasant Vihar", "Vivek Vihar"]
 
+        # Check if the district is valid
         if input_district not in districts:
             return jsonify({"error": "District not found in the list."}), 400
 
-        # Calculate the date range
+        # Calculate the start date
         start_date = datetime(year=2024, month=int(input_month.split('_')[1]), day=input_day)
+
         predictions = []
 
+        # Loop to get predictions for the last three days
         for i in range(3):
             current_date = start_date - timedelta(days=2-i)
             formatted_date = current_date.strftime("%d %B")
             formatted_month = f"Month_{current_date.month}"
             day_str = f"Day_{current_date.day}"
 
-            # Get prediction for the district
+            # Get prediction for the district using model_input and model.predict
             ml_input = model_input(day_str, input_district, formatted_month)
             prediction = model.predict([ml_input])[0]
 
+            # Append the prediction for the current date
             predictions.append({"date": formatted_date, "prediction": prediction})
 
-        return jsonify({"district": input_district, "predictions": predictions})
+        # Prepare the output data
+        output_data = {
+            "district": input_district,
+            "predictions": predictions
+        }
+
+        # Save output to bardata2.json
+        with open(json_file_path, 'w') as json_file:
+            json.dump(output_data, json_file, indent=2)
+
+        # Return the response as JSON
+        return jsonify(output_data)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
