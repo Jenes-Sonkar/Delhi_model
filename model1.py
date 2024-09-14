@@ -7,6 +7,23 @@ app = Flask(__name__)
 # Load the pre-trained model
 model = load('MLmodel.joblib')
 
+list2 = []
+
+# Define a mapping from month code to month name
+month_mapping = {
+    "Month_1": "January",
+    "Month_2": "February",
+    "Month_3": "March",
+    "Month_4": "April",
+    "Month_5": "May",
+    "Month_6": "June",
+    "Month_7": "July",
+    "Month_8": "August",
+    "Month_9": "September",
+    "Month_10": "October",
+    "Month_11": "November",
+    "Month_12": "December"
+}
 
 def model_input(input_day, input_district, input_month):
     sub_districts = ["Chanakyapuri", "Civil Lines", "Connaught Place", "Daryaganj", "Defence Colony",
@@ -30,20 +47,10 @@ def model_input(input_day, input_district, input_month):
     merged_input = inputDistrict + inputMonth + inputDay
     return merged_input
 
-
-def generate_date_range(start_day, start_month, num_days):
-    # Convert month name to month number
-    month_mapping = {f"Month_{i + 1}": i + 1 for i in range(12)}
-    start_month_number = month_mapping[start_month]
-
-    # Define the start date
-    start_date = datetime(year=2023, month=start_month_number, day=start_day)
-
-    # Generate a list of dates
-    date_range = [start_date + timedelta(days=i) for i in range(num_days)]
-
-    return date_range
-
+def format_date(day, month):
+    day = int(day)
+    month_name = month_mapping.get(month, "Unknown Month")
+    return f"{day} {month_name}"
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -69,19 +76,20 @@ def predict():
         for district in districts:
             ml_input = model_input(input_day, district, input_month)  # Prepare the input
             prediction = model.predict([ml_input])  # Get the prediction
-            predictions[district] = prediction.tolist()
+            predictions[district] = prediction.tolist()  # Store the prediction for the district
+            list2.append(str(predictions[district][0]))
 
         # Find the prediction for the input_district
-        if input_district in predictions:
-            result = predictions[input_district][0]
+        if input_district in districts:
+            index = districts.index(input_district)
+            result = list2[index]
         else:
             return jsonify({"error": "District not found in the list."}), 400
-
-        return jsonify({"prediction": result})
+        print(list2)
+        return jsonify({"prediction": result})  # Return the prediction for the input district
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/list2", methods=["GET"])
 def get_list2():
@@ -89,7 +97,6 @@ def get_list2():
         return jsonify({"list2": list2})  # Return list2 as JSON
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/compare", methods=["POST"])
 def compare_districts():
@@ -102,8 +109,7 @@ def compare_districts():
         district2 = data.get('district2')
 
         if not all([input_day, input_month, district1, district2]):
-            return jsonify(
-                {"error": "Missing data. Ensure 'day', 'month', 'district1', and 'district2' are provided."}), 400
+            return jsonify({"error": "Missing data. Ensure 'day', 'month', 'district1', and 'district2' are provided."}), 400
 
         # Define the list of districts
         districts = ["Chanakyapuri", "Civil Lines", "Connaught Place", "Daryaganj", "Defence Colony",
@@ -115,34 +121,36 @@ def compare_districts():
         if district1 not in districts or district2 not in districts:
             return jsonify({"error": "One or both districts not found in the list."}), 400
 
-        # Get the predictions for both districts for the next 15 days from the given input date
-        def get_predictions(district):
-            date_range = generate_date_range(input_day, input_month, 15)
-            predictions = []
-            for date in date_range:
-                day_str = f"Day_{date.day}"
-                month_str = f"Month_{date.month}"
-                ml_input = model_input(day_str, district, month_str)
-                prediction = model.predict([ml_input])
-                predictions.append({
-                    "date": f"{month_str} {date.day}",
-                    "prediction": prediction[0]
-                })
-            return predictions
+        # Calculate the date range
+        start_date = datetime(year=2024, month=int(input_month.split('_')[1]), day=input_day)
+        predictions1 = []
+        predictions2 = []
 
-        # Get predictions for both districts
-        district1_predictions = get_predictions(district1)
-        district2_predictions = get_predictions(district2)
+        for i in range(15):
+            current_date = start_date + timedelta(days=i)
+            formatted_date = current_date.strftime("%d %B")
+            formatted_month = f"Month_{current_date.month}"
+            day_str = f"Day_{current_date.day}"
 
-        # Prepare the result with district names and predictions
+            # Get predictions for both districts
+            ml_input1 = model_input(day_str, district1, formatted_month)
+            prediction1 = model.predict([ml_input1])[0]
+
+            ml_input2 = model_input(day_str, district2, formatted_month)
+            prediction2 = model.predict([ml_input2])[0]
+
+            predictions1.append({"date": formatted_date, "prediction": prediction1})
+            predictions2.append({"date": formatted_date, "prediction": prediction2})
+
+        # Compare predictions
         comparison_result = {
             "district1": {
                 "name": district1,
-                "predictions": district1_predictions
+                "predictions": predictions1
             },
             "district2": {
                 "name": district2,
-                "predictions": district2_predictions
+                "predictions": predictions2
             }
         }
 
@@ -150,7 +158,6 @@ def compare_districts():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     app.run(debug=True)
